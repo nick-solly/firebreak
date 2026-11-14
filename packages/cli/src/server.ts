@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, join } from "node:path";
@@ -33,7 +33,8 @@ export function ensureViewerBuilt(): string {
     !existsSync(index) || statSync(index).mtimeMs < Math.max(newestMtime(src), newestMtime(engineSrc));
   if (stale) {
     console.log("building viewer…");
-    execFileSync("pnpm", ["--filter", "@firebreak/viewer", "build"], { cwd: REPO_ROOT, stdio: "ignore" });
+    // Through a shell: on Windows pnpm is a pnpm.cmd shim that execFile cannot start.
+    execSync("pnpm --filter @firebreak/viewer build", { cwd: REPO_ROOT, stdio: "inherit" });
   }
   return index;
 }
