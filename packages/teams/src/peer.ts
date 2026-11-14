@@ -68,7 +68,9 @@ export class PeerTeam implements TeamController {
   }
 
   async idle(): Promise<void> {
-    await Promise.all(this.agents.map((a) => a.idle()));
+    // A pending delivery wakes an agent, whose decision may send more: repeat until both are quiet.
+    do await Promise.all(this.agents.map((a) => a.idle()));
+    while (await this.opts.transport?.idle?.());
   }
 
   async teardown(): Promise<void> {

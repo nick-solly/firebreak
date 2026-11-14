@@ -18,7 +18,7 @@ import {
   type Transport,
   type WorldHandle,
 } from "@firebreak/runtime";
-import { PeerTeam, SubagentTeam, botsNone, botsPerfect } from "@firebreak/teams";
+import { PeerTeam, SubagentTeam, botsNone, botsPerfect, teamFactory } from "@firebreak/teams";
 import { z } from "zod";
 import { verifyRecording } from "../src/verify";
 
@@ -51,7 +51,7 @@ class FakeLlm implements LlmClient {
     } else {
       await call("move_to", { x: 10, y: 1 });
       if (names.has("send_message") && tick === 0)
-        await call("send_message", { to: "all", text: "heading north" });
+        await call("send_message", { to: "all", room: "team", mentions: ["all"], text: "heading north" });
     }
     return {
       response: "",
@@ -107,10 +107,22 @@ class FakeTransport implements Transport {
   async teardown() {}
 }
 
-async function record(teams: TeamFactory[], ticks: number, llm: LlmClient | null) {
+async function record(
+  teams: TeamFactory[],
+  ticks: number,
+  llm: LlmClient | null,
+  extra: Record<string, unknown> = {},
+) {
   const dir = tmp();
   const { config } = resolveConfig({
-    overrides: { seed: 11, ticks, tick_ms: 1000, teams: teams.map((t) => t.type), llm: { backend: "api" } },
+    overrides: {
+      seed: 11,
+      ticks,
+      tick_ms: 1000,
+      teams: teams.map((t) => t.type),
+      llm: { backend: "api" },
+      ...extra,
+    },
   });
   const file = join(dir, "m.sqlite");
   const writer = new RecordingWriter(file);
@@ -209,5 +221,29 @@ describe("LLM teams (fake model)", () => {
     expect(reports[0]!.kind === "message" && reports[0]!.text).toMatch(/SEEN:/);
     const m = computeMetrics(file);
     expect(m.worlds[0]!.orchestrator_queue_median_ms).not.toBeNull();
+  });
+
+  it("the Band control teams run a full match: every message is delivered, consumed and verifiable", async () => {
+    const teams = [teamFactory("band-replica"), teamFactory("chat-broadcast")];
+    const { file, result } = await record(teams, 6, new FakeLlm(), { replica: { latency_ms: 0 } });
+    expect(result.status).toBe("completed");
+    expect(verifyRecording(file).ok).toBe(true);
+    const frames = loadBundle(file).frames;
+    for (const world of ["w1-band-replica", "w2-chat-broadcast"]) {
+      const msgs = frames.filter((f) => f.kind === "message" && f.world_id === world);
+      expect(msgs.length).toBeGreaterThanOrEqual(5);
+      const deliveries = frames.filter(
+        (f) => f.kind === "delivery" && f.stage === "delivered" && f.world_id === world,
+      );
+      const expected = msgs.reduce((n, m) => n + (m.kind === "message" ? m.to.length : 0), 0);
+      expect(deliveries).toHaveLength(expected);
+      expect(
+        frames.some((f) => f.kind === "delivery" && f.stage === "consumed" && f.world_id === world),
+      ).toBe(true);
+    }
+    const db = openRecording(file);
+    const cfg = readConfig(db) as { resolved: { replica: unknown } };
+    db.close();
+    expect(cfg.resolved.replica).toEqual({ latency_ms: 0 });
   });
 });

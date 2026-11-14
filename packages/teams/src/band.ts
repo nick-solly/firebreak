@@ -1,7 +1,6 @@
 import { Agent, GenericAdapter } from "@band-ai/sdk";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { z } from "zod";
 import { parse } from "yaml";
 import {
   MessageLog,
@@ -13,6 +12,7 @@ import {
   type WorldHandle,
 } from "@firebreak/runtime";
 import { PeerTeam } from "./peer";
+import { BAND_COMMS, bandRecipients, bandTools } from "./rooms";
 
 interface Cred {
   agent_id: string;
@@ -42,12 +42,6 @@ export function loadBandCredentials(file: string): Record<string, Cred> {
   }
   return parse(readFileSync(path, "utf8")) as Record<string, Cred>;
 }
-
-const COMMS = `You are connected to your teammates through Band, a messaging platform for agents.
-- There is a team room called "team" with all 5 of you. You can also create smaller rooms for a specific task (e.g. "fire-12-7" with ff1 and ff2) and add teammates to them.
-- Every message must @mention at least one teammate, and ONLY the mentioned teammates receive it. Use mentions: ["all"] to reach everyone in the room.
-- Mention exactly who needs to know. Do not spam: every message wakes up its recipients.
-- Messages arrive in about a second. Share what matters: fires you see, civilians, debris, the wind forecast, and what you are doing next.`;
 
 /**
  * The Band team's transport (SPEC §7.3): five real Band agents connected through @band-ai/sdk.
@@ -163,32 +157,7 @@ export class BandTransport implements Transport {
   }
 
   tools(_agent: string): ToolDef[] {
-    return [
-      {
-        name: "send_message",
-        description:
-          'Post a message in a Band room. Only the teammates you @mention receive it. mentions: teammate ids (scout, ff1, ff2, engineer, rescuer) or ["all"].',
-        schema: {
-          room: z.string().describe('room name, e.g. "team"'),
-          text: z.string(),
-          mentions: z.array(z.string()).min(1),
-        },
-      },
-      {
-        name: "create_room",
-        description:
-          "Create a new Band room for a task and add teammates to it (you are added automatically).",
-        schema: {
-          name: z.string().describe('short name, e.g. "fire-12-7"'),
-          participants: z.array(z.string()),
-        },
-      },
-      {
-        name: "add_participant",
-        description: "Add a teammate to an existing room.",
-        schema: { room: z.string(), agent: z.string() },
-      },
-    ];
+    return bandTools();
   }
 
   async call(agent: string, tool: string, input: Record<string, unknown>): Promise<ToolResult> {
@@ -240,20 +209,9 @@ export class BandTransport implements Transport {
   }
 
   private async send(agent: string, roomName: string, text: string, mentions: string[]): Promise<ToolResult> {
-    const room = this.rooms.get(roomName.replace(/^#/, ""));
-    if (!room)
-      return { text: `no room "${roomName}". Rooms: ${[...this.rooms.keys()].join(", ")}`, isError: true };
-    if (!room.members.has(agent)) return { text: `you are not in "${room.name}"`, isError: true };
-    const targets = mentions.includes("all")
-      ? [...room.members].filter((m) => m !== agent)
-      : [...new Set(mentions)].filter((m) => m !== agent);
-    const unknown = targets.filter((m) => !room.members.has(m));
-    if (unknown.length)
-      return {
-        text: `not in "${room.name}": ${unknown.join(", ")}. Add them first or use another room.`,
-        isError: true,
-      };
-    if (!targets.length) return { text: "mention at least one teammate", isError: true };
+    const r = bandRecipients(this.rooms, agent, roomName, mentions);
+    if ("isError" in r) return r;
+    const { room, targets } = r;
     const { id, t_ms } = this.log.sent(agent, {
       to: targets,
       channel: `#${room.name}`,
@@ -269,7 +227,7 @@ export class BandTransport implements Transport {
   }
 
   promptSection(_agent: string): string {
-    return COMMS;
+    return BAND_COMMS;
   }
 
   async teardown(): Promise<void> {

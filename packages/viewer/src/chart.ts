@@ -5,6 +5,8 @@ const TEAM_COLOR: Record<string, string> = {
   none: "#9097b1",
   perfect: "#f5d547",
   band: "#ff7a3d",
+  "band-replica": "#f08fb4",
+  "chat-broadcast": "#4fd1c5",
   subagents: "#c792ea",
   slack: "#5bc0eb",
   linear: "#7cfc9a",

@@ -35,6 +35,11 @@ export interface Transport {
   onDeliver(agent: string, cb: (m: DeliveredMessage) => void): void;
   /** Short text for the prompt describing how communication works on this team. */
   promptSection(agent: string): string;
+  /**
+   * For transports that deliver later in this process (e.g. a simulated delay): resolve when no
+   * delivery is pending, and return whether there was any. The virtual clock waits for it.
+   */
+  idle?(): Promise<boolean>;
   teardown(): Promise<void>;
 }
 

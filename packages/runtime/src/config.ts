@@ -42,6 +42,8 @@ export interface MatchConfig {
   };
   subagents: { max_lifetime_ticks: number };
   band: { agents_file: string; rest_url: string; ws_url: string };
+  /** Band control teams (band-replica, chat-broadcast): delivery delay, "band" samples Band's measured delays. */
+  replica: { latency_ms: "band" | number };
   record: { dir: string; prompts: boolean };
 }
 
@@ -84,6 +86,7 @@ export const DEFAULT_MATCH_CONFIG: MatchConfig = {
     rest_url: "https://app.band.ai",
     ws_url: "wss://app.band.ai/api/v1/socket/websocket",
   },
+  replica: { latency_ms: "band" },
   record: { dir: "runs", prompts: true },
 };
 
@@ -154,6 +157,9 @@ export function validateConfig(c: MatchConfig): void {
   if (!["api", "claude-code"].includes(c.llm.backend))
     throw new Error(`unknown llm.backend ${c.llm.backend}`);
   if (c.teams.length === 0) throw new Error("teams must not be empty");
+  const lat = c.replica.latency_ms;
+  if (lat !== "band" && !(typeof lat === "number" && lat >= 0))
+    throw new Error('replica.latency_ms must be "band" or a number >= 0');
 }
 
 const SECRET_KEY = /(api[_-]?key|token|secret|password|authorization)/i;

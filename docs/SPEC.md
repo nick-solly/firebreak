@@ -207,7 +207,7 @@ Everything an agent does goes through tool calls. There is no free-text parsing.
 
 Two kinds of team controller:
 
-- **Peer teams** (none, perfect, band, slack, linear): 5 agents, each running the loop in 6.1, talking through a `Transport`.
+- **Peer teams** (none, perfect, band, band-replica, chat-broadcast, slack, linear): 5 agents, each running the loop in 6.1, talking through a `Transport`.
 - **Orchestrated team** (subagents): an orchestrator plus spawned sub-agents (7.4).
 
 ```ts
@@ -259,6 +259,23 @@ Follows the real sub-agent pattern (Claude Agent SDK / Task tool, LangGraph supe
 - 5 Linear agents/users, one team and project per match, webhooks (not polling).
 - Tools: `create_issue(title, description, assignee?)`, `comment(issue, text)`, `set_status(issue, status)`, `assign(issue, agent)`.
 - An agent is sent events for issues assigned to it, issues it's subscribed to, and comments that mention it.
+
+### 7.7 `band-replica` and `chat-broadcast` (controls for Band)
+
+These two teams answer one question: does the Band team's result come from Band, or from having any inter-agent chat? Both run in-process, with no external service, through `LocalRoomTransport` (`packages/teams/src/replica.ts`).
+
+- **`band-replica`** shows the model exactly what the Band team sees: the same tool definitions and the same COMMUNICATION text, from one shared source (`packages/teams/src/rooms.ts`). It applies the same delivery rules (only @mentioned room members receive a message, at least one mention, `["all"]` for every other member) and the same error results. Delivered text has Band's format: the mentions in front of the text, last mention first. Each delivery waits for a delay sampled from Band's measured delays (docs/TUNING.md §7). The only remaining difference from `band` is the platform itself.
+- **`chat-broadcast`** is `band-replica` with one change: every message reaches everyone else in the room. `send_message` has no `mentions` field, and two lines of the COMMUNICATION text describe broadcast delivery in place of the mention rule. Rooms, the delay and all other text stay the same.
+- The text keeps the name "Band" in both teams, so the platform name is not a second variable.
+- `replica.latency_ms`: `"band"` (default) samples Band's measured delays, seeded by the match seed; a number gives a fixed delay (tests use 0).
+
+A four-team match `none, band, band-replica, chat-broadcast` compares all of them on one seed:
+
+| Comparison | Question |
+|---|---|
+| `band` − `band-replica` | Does Band's platform add anything? |
+| `band-replica` − `chat-broadcast` | Does mention-only delivery add anything? |
+| `chat-broadcast` − `none` | Does any communication add anything? |
 
 ## 8. Recording and replay
 

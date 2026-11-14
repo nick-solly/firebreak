@@ -7,6 +7,8 @@ Teams of 5 AI firefighters defend identical copies of a town from spreading wild
 | Team                        | How it communicates                                                                               |
 | --------------------------- | ------------------------------------------------------------------------------------------------- |
 | `band`                      | Real Band rooms through `@band-ai/sdk`: @mention exactly who needs to know, create rooms per task |
+| `band-replica`              | Control team: Band's tools, prompt and delivery rules, run in-process with Band's measured delay  |
+| `chat-broadcast`            | Control team: the same, except every message reaches everyone in the room (no mentions)           |
 | `subagents`                 | An orchestrator with no body spawns one sub-agent per body; sub-agents only report back           |
 | `none`                      | No communication (lower bound)                                                                    |
 | `perfect`                   | Everyone sees everything any teammate sees, instantly (upper bound)                               |

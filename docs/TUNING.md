@@ -80,3 +80,15 @@ The first attempt hit the Claude subscription's usage limit at tick 1; the runne
 2. Try one batch with a stronger model (open question §14.7): weak play adds noise that hides communication effects.
 3. Look at why `perfect` underperforms (herding, prompt size), e.g. give each agent its own view plus a compact list of teammates' orders instead of the full union.
 4. Keep the showcase honest: pick replays that show the mechanism (idle sub-agent bodies, forecasts that never arrive), not just the biggest score gap.
+
+## 7. Band control teams (measured on the seven curated recordings)
+
+Measured before building `band-replica` and `chat-broadcast` (SPEC §7.7), from the Band worlds in `recordings/20260927-*.sqlite`:
+
+- **Delivery delay** (send to delivery, 1,448 deliveries): min 365 ms, p50 409 ms, p90 561 ms, p95 724 ms, max 1,044 ms. `bandLatencySampler` samples these 5% quantiles. A delivered message then waits a median of about 2.2 s for the recipient's next decision (prompt v3 batch), so the platform delay is a small part of the total.
+- **Delivered text:** in all 582 messages found in recorded prompts, Band put the mentions in front of the text, last mention first (`@ff2 @ff1 <text>`). The replica copies this.
+- **Rooms:** the agents never called `create_room`. Every match has only the setup room.
+- **Addressing:** in the prompt v3 batch, 168 of 389 Band messages (43%) went to 4 or more teammates, so close to broadcast.
+
+No control-team matches have run yet. Plan at least 10 seeds of `none, band, band-replica, chat-broadcast`: with swings of about ±50 points per match, a 20-point difference needs about 30 matches.
+

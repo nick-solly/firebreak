@@ -1,11 +1,19 @@
 import type { TeamFactory } from "@firebreak/runtime";
 import { band } from "./band";
+import { bandReplica, chatBroadcast } from "./replica";
 import { subagents } from "./subagents";
 import { PeerTeam } from "./peer";
 import { botsNone, botsPerfect } from "./scripted";
 
 export { PeerTeam } from "./peer";
 export { BandTransport, band } from "./band";
+export {
+  LocalRoomTransport,
+  bandLatencySampler,
+  bandReplica,
+  chatBroadcast,
+  type Addressing,
+} from "./replica";
 export { SubagentTeam, subagents, ORCHESTRATOR } from "./subagents";
 export { botsNone, botsPerfect } from "./scripted";
 
@@ -27,6 +35,8 @@ const REGISTRY: Record<string, TeamFactory> = {
   none,
   perfect,
   band,
+  "band-replica": bandReplica,
+  "chat-broadcast": chatBroadcast,
   subagents,
   "bots-none": botsNone,
   "bots-perfect": botsPerfect,

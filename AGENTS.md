@@ -10,7 +10,7 @@ Firebreak runs identical wildfire worlds side by side, one per team, and compare
 packages/engine    pure deterministic simulation: rules, scenario, observations, scripted bots, stream types (browser-safe)
 packages/recorder  SQLite recordings: schema, writer, reader, metrics
 packages/runtime   match runner, clock, agent loop, prompts, order tools, LLM backends (api, claude-code)
-packages/teams     none, perfect, band (Band SDK), subagents, bots-*
+packages/teams     none, perfect, band (Band SDK), band-replica, chat-broadcast, subagents, bots-*
 packages/viewer    Vite + Canvas 2D viewer, built to one self-contained index.html
 packages/cli       `firebreak` CLI: run, replay, verify, metrics, export, batch, report, serve
 recordings/        curated recordings committed to the repo
