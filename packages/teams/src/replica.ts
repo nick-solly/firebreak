@@ -46,7 +46,13 @@ export class LocalRoomTransport implements Transport {
     this.agentIds = new Set(agentIds);
     if (!this.o.latencyMs) {
       const lat = world.config.replica.latency_ms;
-      this.o.latencyMs = lat === "band" ? bandLatencySampler(world.config.seed) : () => lat;
+      const seed = world.config.seed;
+      this.o.latencyMs =
+        lat === "band-live"
+          ? liveBandSampler(seed, () => world.deliveryDelays("band"))
+          : lat === "band"
+            ? bandLatencySampler(seed)
+            : () => lat;
     }
     this.createRoom(agentIds[0]!, "team", agentIds);
   }
@@ -172,10 +178,11 @@ export class LocalRoomTransport implements Transport {
 
 /**
  * Band's send-to-delivery delay in ms at every 5th percentile (p0, p5, ... p100), measured on
- * 1,448 deliveries in the seven curated recordings of 2026-09-27 (recordings/README.md).
+ * 730 deliveries between five agents with no match running, 2026-11-21 (docs/TUNING.md §7).
+ * The 2026-09-27 table (1,448 deliveries in the curated recordings) was min 365, p50 409, max 1,044.
  */
 const BAND_LATENCY_QUANTILES = [
-  365, 375, 379, 383, 386, 390, 392, 396, 400, 405, 409, 414, 420, 427, 435, 445, 463, 490, 561, 724, 1044,
+  587, 603, 610, 615, 620, 624, 629, 636, 642, 648, 656, 665, 683, 710, 730, 761, 788, 831, 933, 1201, 2665,
 ];
 
 /**
@@ -183,20 +190,44 @@ const BAND_LATENCY_QUANTILES = [
  * (Not the engine's roll(): delays are transport timing, not world randomness.)
  */
 export function bandLatencySampler(seed: number): () => number {
-  let s = (seed ^ 0x9e3779b9) >>> 0;
-  const next = () => {
-    // mulberry32
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  const next = mulberry32(seed ^ 0x9e3779b9);
   const q = BAND_LATENCY_QUANTILES;
   return () => {
     const x = next() * (q.length - 1);
     const i = Math.floor(x);
     return Math.round(q[i]! + (q[Math.min(i + 1, q.length - 1)]! - q[i]!) * (x - i));
+  };
+}
+
+/** Delays the live sampler draws from, and how many it needs before it stops using the fixed table. */
+const LIVE_WINDOW = 200;
+const LIVE_MIN = 20;
+
+/**
+ * Samples a delivery delay from the delays Band actually had in this match so far: one of the
+ * band world's last 200 send-to-delivery delays, uniformly. Until that world has 20 deliveries,
+ * or when the match has no band world (`delays` returns null), it samples the fixed table.
+ */
+export function liveBandSampler(seed: number, delays: () => readonly number[] | null): () => number {
+  const table = bandLatencySampler(seed);
+  const next = mulberry32(seed ^ 0x85ebca6b);
+  return () => {
+    const d = delays();
+    if (!d || d.length < LIVE_MIN) return table();
+    const start = Math.max(0, d.length - LIVE_WINDOW);
+    return Math.round(d[start + Math.floor(next() * (d.length - start))]!);
+  };
+}
+
+/** Seeded uniform [0, 1) generator (mulberry32). */
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 

@@ -9,7 +9,7 @@ import {
   type ToolDef,
   type WorldHandle,
 } from "@firebreak/runtime";
-import { BandTransport, LocalRoomTransport, bandLatencySampler } from "@firebreak/teams";
+import { BandTransport, LocalRoomTransport, bandLatencySampler, liveBandSampler } from "@firebreak/teams";
 
 const AGENTS = ["scout", "ff1", "ff2", "engineer", "rescuer"];
 const EOL = "\n";
@@ -215,18 +215,59 @@ describe("chat-broadcast transport (control for Band, SPEC §7.7)", () => {
   });
 });
 
+describe("Band delivery latency, following Band live", () => {
+  it("samples only the last 200 delays the band world had in this match", () => {
+    const delays = [...Array<number>(100).fill(5), ...Array<number>(200).fill(777)];
+    const sample = liveBandSampler(7, () => delays);
+    expect(new Set(Array.from({ length: 1000 }, sample))).toEqual(new Set([777]));
+  });
+
+  it("uses the fixed table until the band world has 20 deliveries", () => {
+    const delays = Array<number>(19).fill(777);
+    const live = liveBandSampler(7, () => delays);
+    const table = bandLatencySampler(7);
+    const xs = Array.from({ length: 50 }, live);
+    expect(xs).toEqual(Array.from({ length: 50 }, table));
+    delays.push(777);
+    expect(live()).toBe(777);
+  });
+
+  it("is the default, and the transport then waits the band world's delays", async () => {
+    const config = resolveConfig({ overrides: { seed: 7 } }).config;
+    expect(config.replica.latency_ms).toBe("band-live");
+    const fast = Array<number>(20).fill(5);
+    const world = {
+      ...fakeWorld().world,
+      config,
+      deliveryDelays: (team: string) => (team === "band" ? fast : null),
+    } as WorldHandle;
+    const transport = new LocalRoomTransport({ addressing: "mentions" });
+    await transport.setup(world, AGENTS);
+    await transport.call("scout", "send_message", { room: "team", text: "hi", mentions: ["ff1"] });
+    const t0 = performance.now();
+    await transport.idle();
+    // 5 ms from the band world, not the fixed table's 587 ms or more.
+    expect(performance.now() - t0).toBeLessThan(200);
+  });
+
+  it("uses the fixed table when the match has no band world", () => {
+    const live = liveBandSampler(7, () => null);
+    expect(Array.from({ length: 20 }, live)).toEqual(Array.from({ length: 20 }, bandLatencySampler(7)));
+  });
+});
+
 describe("Band delivery latency for the control teams", () => {
   it("follows the delays measured on Band, and repeats for the same seed", () => {
     const sample = bandLatencySampler(7);
     const xs = Array.from({ length: 10_000 }, sample).sort((a, b) => a - b);
     const q = (p: number) => xs[Math.round(p * (xs.length - 1))]!;
-    // Measured on 1,448 deliveries in the seven curated recordings: min 365, p50 409, p90 561, p95 724, max 1044 ms.
-    expect(xs[0]).toBeGreaterThanOrEqual(365);
-    expect(xs.at(-1)).toBeLessThanOrEqual(1044);
-    expect(q(0.5)).toBeGreaterThan(395);
-    expect(q(0.5)).toBeLessThan(425);
-    expect(q(0.9)).toBeGreaterThan(520);
-    expect(q(0.9)).toBeLessThan(610);
+    // Measured on 730 deliveries on 2026-11-21 (docs/TUNING.md §7): min 587, p50 656, p90 933, max 2665 ms.
+    expect(xs[0]).toBeGreaterThanOrEqual(587);
+    expect(xs.at(-1)).toBeLessThanOrEqual(2665);
+    expect(q(0.5)).toBeGreaterThan(640);
+    expect(q(0.5)).toBeLessThan(672);
+    expect(q(0.9)).toBeGreaterThan(900);
+    expect(q(0.9)).toBeLessThan(970);
     const again = bandLatencySampler(7);
     const other = bandLatencySampler(8);
     const first = Array.from({ length: 20 }, bandLatencySampler(7));

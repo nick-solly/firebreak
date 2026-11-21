@@ -10,6 +10,7 @@ export { BandTransport, band } from "./band";
 export {
   LocalRoomTransport,
   bandLatencySampler,
+  liveBandSampler,
   bandReplica,
   chatBroadcast,
   type Addressing,

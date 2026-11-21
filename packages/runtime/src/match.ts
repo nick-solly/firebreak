@@ -76,10 +76,19 @@ export class MatchRunner {
   }
 
   private ended = false;
+  /** Send time of every recorded message, and send-to-delivery delays per team type. */
+  private sentAt = new Map<string, number>();
+  private delays = new Map<string, number[]>();
 
   private emit(frame: StreamFrame): void {
     if (this.ended) return;
     if (frame.kind === "end") this.ended = true;
+    if (frame.kind === "message") this.sentAt.set(`${frame.world_id}/${frame.id}`, frame.t_ms);
+    if (frame.kind === "delivery" && frame.stage === "delivered") {
+      const sent = this.sentAt.get(`${frame.world_id}/${frame.message_id}`);
+      const team = this.worlds.find((w) => w.id === frame.world_id)?.factory.type;
+      if (sent !== undefined && team) this.delays.get(team)?.push(frame.t_ms - sent);
+    }
     for (const s of this.o.sinks) s.write(frame);
   }
 
@@ -139,6 +148,7 @@ export class MatchRunner {
         emit({ ...frame, world_id: w.id } as StreamFrame);
       },
       abort: (reason) => this.abort(reason),
+      deliveryDelays: (team) => this.delays.get(team) ?? null,
     };
   }
 
@@ -168,6 +178,7 @@ export class MatchRunner {
       state: this.scenario.initial,
       pending: {},
     }));
+    for (const w of this.worlds) if (!this.delays.has(w.factory.type)) this.delays.set(w.factory.type, []);
 
     // Setup happens before the clock starts (Band rooms, bots...).
     for (const w of this.worlds) {

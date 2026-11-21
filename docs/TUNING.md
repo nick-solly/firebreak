@@ -92,12 +92,28 @@ Measured before building `band-replica` and `chat-broadcast` (SPEC §7.7), from 
 
 No control-team matches have run yet. Plan at least 10 seeds of `none, band, band-replica, chat-broadcast`: with swings of about ±50 points per match, a 20-point difference needs about 30 matches.
 
-### 7.1 Batch plan (written 2026-11-20, before any full control-team match)
+**Band got slower (2026-11-20 and 2026-11-21).** The dry run (seed 99, `runs/20261120-191605-s99-jv5q.sqlite`) found Band's delay about twice the table's. A probe with no model then sent 300 messages between the five agents (1 to 4 recipients each, one every 2.4 s; 2026-11-21 09:36 to 09:50 UTC):
 
-Fixed before the batch runs, so the seeds and the analysis cannot be chosen after seeing results.
+| Band send-to-delivery delay | n | min | p50 | p90 | p95 | max (ms) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-09-27, curated matches (the old table) | 1,448 | 365 | 409 | 561 | 724 | 1,044 |
+| 2026-11-21, probe, no match running | 730 | 587 | 656 | 933 | 1,201 | 2,665 |
+| 2026-11-20, dry run, during the match | 96 | 625 | 918 | 1,741 | 2,116 | 2,672 |
+| 2026-11-20, dry run, `band-replica` (old table) | 100 | 378 | 416 | 652 | 715 | 1,014 |
+
+- Band's lowest delay rose by about 220 ms. The REST send alone takes 339 ms (p50).
+- Delays are longer during a match than with no match running, and they change within minutes (probe p90: 1,191 ms in the first half, 804 ms in the second).
+- The replica's own timers ran on time in the same process (p50 416 ms against a target of 409), so the extra delay is not our event loop.
+- Why it matters: ticks run on the clock (5 s), so a later delivery can push the recipient's order past a tick boundary. An extra 500 ms does this for about 10% of message-driven decisions, always against the slower team.
+
+**Change:** a fixed table goes out of date, so the control teams now follow Band live (`replica.latency_ms: band-live`, SPEC §7.7). Each delivery samples one of the last 200 delays of the `band` world in the same match. Until that world has 20 deliveries, or with no `band` team, it samples the fixed table, which now holds the 2026-11-21 probe's quantiles.
+
+### 7.1 Batch plan (written 2026-11-20, amended 2026-11-21, before any full control-team match)
+
+Fixed before the batch runs, so the seeds and the analysis cannot be chosen after seeing results. Amended once before the batch: the replica delay now follows Band live (see above), and the delay check changed to match.
 
 - **Teams:** `none, band, band-replica, chat-broadcast`, all four in every match.
-- **Settings:** the defaults at the commit that adds this plan: engine 0.2.0, prompt v3, `claude-code` backend, `claude-haiku-4-5-20251001`, 60 ticks × 5,000 ms, `replica.latency_ms: band`. No change to code, prompts or config during the batch.
+- **Settings:** the defaults at the commit that adds `band-live`: engine 0.2.0, prompt v3, `claude-code` backend, `claude-haiku-4-5-20251001`, 60 ticks × 5,000 ms, `replica.latency_ms: band-live`. No change to code, prompts or config during the batch.
 - **Seeds:** 100 to 129 (30 matches). Seeds 5 and 11 to 13 were used to tune the prompts and are not used. Seed 99 is a dry run and is not part of the results.
 - **Band agents:** five external agents in the runner's own Band account (not the agents of the curated recordings). The agents only carry messages; the LLM loop is ours.
 - **Main metric:** final score. For each seed, take the paired difference between two teams on the same seed:
@@ -111,5 +127,5 @@ Fixed before the batch runs, so the seeds and the analysis cannot be chosen afte
   Report the mean paired difference with a 95% confidence interval (t distribution, 29 degrees of freedom), and the number of seeds where it is positive. A comparison shows a difference only if the interval excludes 0. All three comparisons are reported, whatever the result.
 - **Secondary metrics** (described, no test): message count, message latency, idle agent-ticks, stale actions, missed joint tasks, cost.
 - **Aborted matches** (`usage_limit`, interrupted, budget) are not scored. Their seed is run again from the start. Every completed match is kept: no match is dropped for its score, model latency or Band errors. Band `transport_error` and `rate_limited` counts are reported per match.
-- **Delay check:** report Band's measured send-to-delivery delays in the batch next to the replica's sampled ones. If Band's median differs from 409 ms by more than 100 ms, say so with the results, because `band` − `band-replica` then also includes that delay difference.
+- **Delay check:** for each match, report the send-to-delivery delays (p50, p90) of `band`, `band-replica` and `chat-broadcast`. If a control team's median differs from Band's by more than 100 ms in a match, say so with the results, because the comparison then also includes that delay difference.
 

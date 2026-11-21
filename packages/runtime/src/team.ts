@@ -25,6 +25,12 @@ export interface WorldHandle {
   emit(frame: DistributiveOmit<StreamFrame, "world_id">): void;
   /** Abort the whole match, e.g. on a usage limit. */
   abort(reason: string): void;
+  /**
+   * Send-to-delivery delays (ms) recorded so far in this match by the worlds of team type `team`,
+   * oldest first; null when no world of that type is in the match. Timing only, never game state:
+   * it lets the Band control teams copy Band's live delivery delay (SPEC §7.7).
+   */
+  deliveryDelays(team: string): readonly number[] | null;
 }
 
 export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;

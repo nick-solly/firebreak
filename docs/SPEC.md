@@ -264,10 +264,14 @@ Follows the real sub-agent pattern (Claude Agent SDK / Task tool, LangGraph supe
 
 These two teams answer one question: does the Band team's result come from Band, or from having any inter-agent chat? Both run in-process, with no external service, through `LocalRoomTransport` (`packages/teams/src/replica.ts`).
 
-- **`band-replica`** shows the model exactly what the Band team sees: the same tool definitions and the same COMMUNICATION text, from one shared source (`packages/teams/src/rooms.ts`). It applies the same delivery rules (only @mentioned room members receive a message, at least one mention, `["all"]` for every other member) and the same error results. Delivered text has Band's format: the mentions in front of the text, last mention first. Each delivery waits for a delay sampled from Band's measured delays (docs/TUNING.md §7). The only remaining difference from `band` is the platform itself.
+- **`band-replica`** shows the model exactly what the Band team sees: the same tool definitions and the same COMMUNICATION text, from one shared source (`packages/teams/src/rooms.ts`). It applies the same delivery rules (only @mentioned room members receive a message, at least one mention, `["all"]` for every other member) and the same error results. Delivered text has Band's format: the mentions in front of the text, last mention first. Each delivery waits for a delay sampled from the delays Band actually had in the same match (docs/TUNING.md §7). The only remaining difference from `band` is the platform itself.
 - **`chat-broadcast`** is `band-replica` with one change: every message reaches everyone else in the room. `send_message` has no `mentions` field, and two lines of the COMMUNICATION text describe broadcast delivery in place of the mention rule. Rooms, the delay and all other text stay the same.
 - The text keeps the name "Band" in both teams, so the platform name is not a second variable.
-- `replica.latency_ms`: `"band"` (default) samples Band's measured delays, seeded by the match seed; a number gives a fixed delay (tests use 0).
+- `replica.latency_ms`:
+  - `"band-live"` (default): samples one of the last 200 send-to-delivery delays of the `band` world in the same match, which the runner shares as timing only (`WorldHandle.deliveryDelays`), never game state. Until that world has 20 deliveries, or in a match with no `band` team, it samples the fixed table.
+  - `"band"`: samples only the fixed table of measured Band delays.
+  - A number gives a fixed delay (tests use 0).
+  - Sampling is seeded by the match seed.
 
 A four-team match `none, band, band-replica, chat-broadcast` compares all of them on one seed:
 

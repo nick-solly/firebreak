@@ -183,6 +183,78 @@ describe("recording and replay", () => {
   });
 });
 
+describe("delivery delays shared across worlds", () => {
+  /** A team that only records frames: one message on tick 1, delivered to two agents after 650 and 900 ms. */
+  const sender: TeamFactory = {
+    type: "band",
+    label: "Sender",
+    usesLlm: false,
+    create: () => {
+      let world: WorldHandle;
+      return {
+        setup: async (w) => void (world = w),
+        onTick: (s) => {
+          if (s.tick !== 1) return;
+          world.emit({
+            kind: "message",
+            id: "m1",
+            t_ms: 1000,
+            from: "scout",
+            to: ["ff1", "ff2"],
+            channel: "#team",
+            text: "hi",
+          });
+          world.emit({
+            kind: "delivery",
+            message_id: "m1",
+            recipient: "ff1",
+            stage: "delivered",
+            t_ms: 1650,
+          });
+          world.emit({
+            kind: "delivery",
+            message_id: "m1",
+            recipient: "ff2",
+            stage: "delivered",
+            t_ms: 1900,
+          });
+          world.emit({ kind: "delivery", message_id: "m1", recipient: "ff1", stage: "consumed", t_ms: 4000 });
+        },
+        idle: async () => {},
+        teardown: async () => {},
+        describe: () => ({ prompts: {}, tools: {} }),
+      };
+    },
+  };
+
+  it("a world can read another team's send-to-delivery delays, and null for a team not in the match", async () => {
+    const seen: { band: readonly number[] | null; absent: readonly number[] | null }[] = [];
+    const probe: TeamFactory = {
+      type: "probe",
+      label: "Probe",
+      usesLlm: false,
+      create: () => {
+        let world: WorldHandle;
+        return {
+          setup: async (w) => void (world = w),
+          onTick: () =>
+            void seen.push({
+              band: [...world.deliveryDelays("band")!],
+              absent: world.deliveryDelays("absent"),
+            }),
+          idle: async () => {},
+          teardown: async () => {},
+          describe: () => ({ prompts: {}, tools: {} }),
+        };
+      },
+    };
+    const { result } = await record([sender, probe], 3, null);
+    expect(result.status).toBe("completed");
+    expect(seen[0]).toEqual({ band: [], absent: null }); // tick 0
+    expect(seen.at(-1)).toEqual({ band: [650, 900], absent: null }); // consumed is not a delivery
+  });
+});
+
 describe("LLM teams (fake model)", () => {
   it("peer agents give orders and their messages are delivered and consumed", async () => {
     const llm = new FakeLlm();
