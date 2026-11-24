@@ -261,13 +261,15 @@ describe("Band delivery latency for the control teams", () => {
     const sample = bandLatencySampler(7);
     const xs = Array.from({ length: 10_000 }, sample).sort((a, b) => a - b);
     const q = (p: number) => xs[Math.round(p * (xs.length - 1))]!;
-    // Measured on 730 deliveries on 2026-11-21 (docs/TUNING.md §7): min 587, p50 656, p90 933, max 2665 ms.
-    expect(xs[0]).toBeGreaterThanOrEqual(587);
-    expect(xs.at(-1)).toBeLessThanOrEqual(2665);
-    expect(q(0.5)).toBeGreaterThan(640);
-    expect(q(0.5)).toBeLessThan(672);
-    expect(q(0.9)).toBeGreaterThan(900);
-    expect(q(0.9)).toBeLessThan(970);
+    // Measured on 762 deliveries on 2026-11-24 (docs/TUNING.md §7): min 214, p50 245, p90 283, mean 271, max 5243 ms.
+    expect(xs[0]).toBeGreaterThanOrEqual(214);
+    expect(xs.at(-1)).toBeLessThanOrEqual(5243);
+    expect(q(0.5)).toBeGreaterThan(238);
+    expect(q(0.5)).toBeLessThan(252);
+    expect(q(0.9)).toBeGreaterThan(272);
+    expect(q(0.9)).toBeLessThan(292);
+    // One 5 s outlier must not dominate: the mean stays close to the measured 271 ms.
+    expect(xs.reduce((a, b) => a + b, 0) / xs.length).toBeLessThan(300);
     const again = bandLatencySampler(7);
     const other = bandLatencySampler(8);
     const first = Array.from({ length: 20 }, bandLatencySampler(7));

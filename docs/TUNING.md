@@ -92,23 +92,24 @@ Measured before building `band-replica` and `chat-broadcast` (SPEC §7.7), from 
 
 No control-team matches have run yet. Plan at least 10 seeds of `none, band, band-replica, chat-broadcast`: with swings of about ±50 points per match, a 20-point difference needs about 30 matches.
 
-**Band got slower (2026-11-20 and 2026-11-21).** The dry run (seed 99, `runs/20261120-191605-s99-jv5q.sqlite`) found Band's delay about twice the table's. A probe with no model then sent 300 messages between the five agents (1 to 4 recipients each, one every 2.4 s; 2026-11-21 09:36 to 09:50 UTC):
+**Band's delay depends on the runner's connection (2026-11-20 to 2026-11-24).** The dry run (seed 99, `runs/20261120-191605-s99-jv5q.sqlite`) found Band's delay about twice the old table's. Probes with no model then sent messages between the five agents (1 to 4 recipients each, one every 2.4 s). Both the REST call of `send_message` and the WebSocket delivery go over the runner's own connection, so all of these numbers measure Band plus that connection:
 
-| Band send-to-delivery delay | n | min | p50 | p90 | p95 | max (ms) |
-| --- | --- | --- | --- | --- | --- | --- |
-| 2026-09-27, curated matches (the old table) | 1,448 | 365 | 409 | 561 | 724 | 1,044 |
-| 2026-11-21, probe, no match running | 730 | 587 | 656 | 933 | 1,201 | 2,665 |
-| 2026-11-20, dry run, during the match | 96 | 625 | 918 | 1,741 | 2,116 | 2,672 |
-| 2026-11-20, dry run, `band-replica` (old table) | 100 | 378 | 416 | 652 | 715 | 1,014 |
+| Band send-to-delivery delay | n | min | p50 | p90 | p95 | max (ms) | REST p50 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-09-27, curated matches (first table) | 1,448 | 365 | 409 | 561 | 724 | 1,044 | |
+| 2026-11-20, poor connection, dry run seed 99, in match | 96 | 625 | 918 | 1,741 | 2,116 | 2,672 | |
+| 2026-11-21, poor connection, probe, no match | 730 | 587 | 656 | 933 | 1,201 | 2,665 | 339 |
+| 2026-11-21, poor connection, dry run seed 98, in match | 68 | 657 | 4,238 | 10,459 | 21,338 | 24,875 | |
+| 2026-11-24, stable connection, probe, no match | 762 | 214 | 245 | 283 | 303 | 5,243 | 150 |
 
-- Band's lowest delay rose by about 220 ms. The REST send alone takes 339 ms (p50).
-- Delays are longer during a match than with no match running, and they change within minutes (probe p90: 1,191 ms in the first half, 804 ms in the second).
-- The replica's own timers ran on time in the same process (p50 416 ms against a target of 409), so the extra delay is not our event loop.
+- On 2026-11-21 this looked like Band getting slower. The 2026-11-24 probe on a stable connection shows it was the connection: Band was faster than in September, and the REST send took 150 ms instead of 339 ms.
+- On a poor connection, delays get much longer during a match than with no match running, because 20 model processes share the connection.
+- The replica's own timers ran on time in the same process (p50 416 ms against a target of 409 in the seed 99 dry run), so the extra delay is not our event loop.
 - Why it matters: ticks run on the clock (5 s), so a later delivery can push the recipient's order past a tick boundary. An extra 500 ms does this for about 10% of message-driven decisions, always against the slower team.
 
-**Change:** a fixed table goes out of date, so the control teams now follow Band live (`replica.latency_ms: band-live`, SPEC §7.7). Each delivery samples one of the last 200 delays of the `band` world in the same match. Until that world has 20 deliveries, or with no `band` team, it samples the fixed table, which now holds the 2026-11-21 probe's quantiles.
+**Change:** a fixed table goes out of date, and it cannot know the runner's connection, so the control teams now follow Band live (`replica.latency_ms: band-live`, SPEC §7.7). Each delivery samples one of the last 200 delays of the `band` world in the same match. Until that world has 20 deliveries, or with no `band` team, it samples the fixed table, which now holds the 2026-11-24 stable-connection probe at every percentile. A table in 5% steps let the one 5,243 ms outlier fill 5% of draws (table mean 373 ms against 271 ms measured); with 1% steps the mean is 281 ms.
 
-**Bad connection (2026-11-21).** A second dry run (seed 98, `runs/20261121-170926-s98-lct3.sqlite`, commit `17158ff`) ran on a poor home connection. Band's in-match p50 was 4,238 ms (max 24,875 ms), with one `fetch failed` send error. Probes with no match running, just before and just after it, gave p50 656 and 666 ms. So the slowdown came from the runner's connection under load (20 model processes share it), not from Band. The replica followed Band live (p50 4,031 ms), which shows `band-live` works. But a bad connection still hurts only `band`, in two ways the replica cannot copy: Band's `send_message` waits for its REST response before the agent's decision continues, and network errors happen only to Band. Batches therefore run on a stable connection, with the rule for network-degraded matches in §7.1.
+**Bad connection (2026-11-21).** The seed 98 dry run (`runs/20261121-170926-s98-lct3.sqlite`, commit `17158ff`) ran on a poor home connection, with one `fetch failed` send error. Probes with no match running, just before and just after it, gave p50 656 and 666 ms, so the slowdown came from the connection under load, not from Band. The replica followed Band live (p50 4,031 ms), which shows `band-live` works. But a bad connection still hurts only `band`, in two ways the replica cannot copy: Band's `send_message` waits for its REST response before the agent's decision continues, and network errors happen only to Band. Batches therefore run on a stable connection, with the rule for network-degraded matches in §7.1.
 
 ### 7.1 Batch plan (written 2026-11-20, amended 2026-11-21 and 2026-11-24, before any full control-team match)
 

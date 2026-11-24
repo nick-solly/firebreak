@@ -177,12 +177,16 @@ export class LocalRoomTransport implements Transport {
 }
 
 /**
- * Band's send-to-delivery delay in ms at every 5th percentile (p0, p5, ... p100), measured on
- * 730 deliveries between five agents with no match running, 2026-11-21 (docs/TUNING.md §7).
- * The 2026-09-27 table (1,448 deliveries in the curated recordings) was min 365, p50 409, max 1,044.
+ * Band's send-to-delivery delay in ms at every percentile (p0, p1, ... p100), measured on 762
+ * deliveries between five agents on a stable connection with no match running, 2026-11-24
+ * (docs/TUNING.md §7). Percentiles, not 5% steps, so one rare 5 s delivery cannot fill 5% of draws.
  */
 const BAND_LATENCY_QUANTILES = [
-  587, 603, 610, 615, 620, 624, 629, 636, 642, 648, 656, 665, 683, 710, 730, 761, 788, 831, 933, 1201, 2665,
+  214, 217, 218, 219, 220, 221, 221, 222, 222, 223, 223, 224, 224, 225, 225, 225, 226, 227, 227, 228, 228,
+  229, 229, 229, 230, 230, 230, 231, 231, 232, 233, 233, 234, 234, 235, 235, 236, 236, 237, 238, 239, 240,
+  240, 241, 241, 242, 243, 243, 244, 244, 245, 245, 246, 247, 247, 248, 249, 249, 250, 250, 251, 251, 252,
+  253, 254, 255, 255, 256, 257, 258, 260, 261, 262, 262, 263, 263, 264, 265, 265, 266, 267, 267, 269, 270,
+  271, 272, 274, 275, 276, 278, 283, 285, 289, 293, 297, 303, 327, 415, 453, 776, 5243,
 ];
 
 /**
