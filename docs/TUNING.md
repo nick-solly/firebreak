@@ -108,9 +108,11 @@ No control-team matches have run yet. Plan at least 10 seeds of `none, band, ban
 
 **Change:** a fixed table goes out of date, so the control teams now follow Band live (`replica.latency_ms: band-live`, SPEC §7.7). Each delivery samples one of the last 200 delays of the `band` world in the same match. Until that world has 20 deliveries, or with no `band` team, it samples the fixed table, which now holds the 2026-11-21 probe's quantiles.
 
-### 7.1 Batch plan (written 2026-11-20, amended 2026-11-21, before any full control-team match)
+**Bad connection (2026-11-21).** A second dry run (seed 98, `runs/20261121-170926-s98-lct3.sqlite`, commit `17158ff`) ran on a poor home connection. Band's in-match p50 was 4,238 ms (max 24,875 ms), with one `fetch failed` send error. Probes with no match running, just before and just after it, gave p50 656 and 666 ms. So the slowdown came from the runner's connection under load (20 model processes share it), not from Band. The replica followed Band live (p50 4,031 ms), which shows `band-live` works. But a bad connection still hurts only `band`, in two ways the replica cannot copy: Band's `send_message` waits for its REST response before the agent's decision continues, and network errors happen only to Band. Batches therefore run on a stable connection, with the rule for network-degraded matches in §7.1.
 
-Fixed before the batch runs, so the seeds and the analysis cannot be chosen after seeing results. Amended once before the batch: the replica delay now follows Band live (see above), and the delay check changed to match.
+### 7.1 Batch plan (written 2026-11-20, amended 2026-11-21 and 2026-11-24, before any full control-team match)
+
+Fixed before the batch runs, so the seeds and the analysis cannot be chosen after seeing results. Amended twice before the batch. On 2026-11-21 the replica delay changed to follow Band live (see above), and the delay check changed to match. On 2026-11-24 network-degraded matches were added to the rules for matches that are run again.
 
 - **Teams:** `none, band, band-replica, chat-broadcast`, all four in every match.
 - **Settings:** the defaults at the commit that adds `band-live`: engine 0.2.0, prompt v3, `claude-code` backend, `claude-haiku-4-5-20251001`, 60 ticks × 5,000 ms, `replica.latency_ms: band-live`. No change to code, prompts or config during the batch.
@@ -126,6 +128,8 @@ Fixed before the batch runs, so the seeds and the analysis cannot be chosen afte
 
   Report the mean paired difference with a 95% confidence interval (t distribution, 29 degrees of freedom), and the number of seeds where it is positive. A comparison shows a difference only if the interval excludes 0. All three comparisons are reported, whatever the result.
 - **Secondary metrics** (described, no test): message count, message latency, idle agent-ticks, stale actions, missed joint tasks, cost.
-- **Aborted matches** (`usage_limit`, interrupted, budget) are not scored. Their seed is run again from the start. Every completed match is kept: no match is dropped for its score, model latency or Band errors. Band `transport_error` and `rate_limited` counts are reported per match.
+- **Aborted matches** (`usage_limit`, interrupted, budget) are not scored. Their seed is run again from the start.
+- **Network-degraded matches** are not scored either, because a slow connection hurts only `band` (see "Bad connection" above). A match is network-degraded if the `band` world's send-to-delivery p50 is above 1,500 ms, or it has any `transport_error` or `rate_limited` event. Both are read from the recording, so anyone can check them. The batch pauses until the connection is fixed, and the seed is run again from the start. Degraded matches are listed with their scores in an appendix.
+- Every other completed match is kept: no match is dropped for its score or model latency. Band `transport_error` and `rate_limited` counts are reported per match.
 - **Delay check:** for each match, report the send-to-delivery delays (p50, p90) of `band`, `band-replica` and `chat-broadcast`. If a control team's median differs from Band's by more than 100 ms in a match, say so with the results, because the comparison then also includes that delay difference.
 
