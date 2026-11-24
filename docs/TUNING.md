@@ -116,7 +116,7 @@ No control-team matches have run yet. Plan at least 10 seeds of `none, band, ban
 Fixed before the batch runs, so the seeds and the analysis cannot be chosen after seeing results. Amended twice before the batch. On 2026-11-21 the replica delay changed to follow Band live (see above), and the delay check changed to match. On 2026-11-24 network-degraded matches were added to the rules for matches that are run again.
 
 - **Teams:** `none, band, band-replica, chat-broadcast`, all four in every match.
-- **Settings:** the defaults at the commit that adds `band-live`: engine 0.2.0, prompt v3, `claude-code` backend, `claude-haiku-4-5-20251001`, 60 ticks × 5,000 ms, `replica.latency_ms: band-live`. No change to code, prompts or config during the batch.
+- **Settings:** the defaults at the commit that adds this sentence: engine 0.2.0, prompt v3, `claude-code` backend, `claude-haiku-4-5-20251001`, 60 ticks × 5,000 ms, `replica.latency_ms: band-live`. No change to code, prompts or config during the batch. Every match records its commit (`git_commit` and `git_dirty` in the `code` section of `match_config`): all scored matches must have that same commit and no uncommitted changes.
 - **Seeds:** 100 to 129 (30 matches). Seeds 5 and 11 to 13 were used to tune the prompts and are not used. Seed 99 is a dry run and is not part of the results.
 - **Band agents:** five external agents in the runner's own Band account (not the agents of the curated recordings). The agents only carry messages; the LLM loop is ours.
 - **Main metric:** final score. For each seed, take the paired difference between two teams on the same seed:
